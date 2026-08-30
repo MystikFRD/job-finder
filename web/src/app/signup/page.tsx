@@ -1,0 +1,108 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+export default function SignupPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, displayName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Signup failed");
+      router.push("/settings");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 sm:p-6">
+      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:p-8">
+        <h1 className="text-2xl font-semibold text-zinc-100">Create account</h1>
+        <p className="mt-2 text-sm text-zinc-500">
+          Your own job search settings, API keys, and n8n workflows
+        </p>
+
+        <form onSubmit={submit} className="mt-8 space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              Display name
+            </label>
+            <input
+              type="text"
+              className={field}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              Email
+            </label>
+            <input
+              type="email"
+              className={field}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              Password (min 8 characters)
+            </label>
+            <input
+              type="password"
+              className={field}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </div>
+
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-zinc-100 py-2 text-sm font-medium text-zinc-900 disabled:opacity-50"
+          >
+            {loading ? "Creating account…" : "Sign up"}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-zinc-500">
+          Already have an account?{" "}
+          <Link href="/login" className="text-sky-400 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}

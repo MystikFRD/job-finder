@@ -1,0 +1,30 @@
+# Dependencies & build
+node_modules/
+web/.next/
+web/out/
+*.tsbuildinfo
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+deploy/.env
+*.pem
+*.key
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+.cursor/
+
+# Logs & temp
+*.log
+npm-debug.log*
+/tmp/
+web/node_modules/
+
+# n8n ops scratch (keep exports/)
+db/n8n-ops/
+db/n8n-exports/.raw/

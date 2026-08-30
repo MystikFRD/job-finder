@@ -1,0 +1,991 @@
+{
+  "name": "Automatic Job Finder (Web Config)",
+  "nodes": [
+    {
+      "id": "dcad65fa-3f15-4b49-be9c-546afdbff68d",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "e1d04421-8460-4bd8-90ce-2e77711a79a8",
+      "name": "When clicking ‘Execute workflow’",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        -96
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "8667c3fd-8a7f-4892-b470-bafe67b2aeee",
+      "name": "Create Search Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -96,
+        16
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "INSERT INTO public.search_runs (user_id) VALUES ('YOUR_USER_UUID'::uuid) RETURNING id, started_at, status;"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "1c87ca94-3777-439e-a976-682badeaacb8",
+      "name": "SearXNG Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        80,
+        16
+      ],
+      "parameters": {
+        "options": {},
+        "url": "={{ $json.search_url }}"
+      }
+    },
+    {
+      "id": "4ab13f24-fa4a-4b1b-a838-614b392442aa",
+      "name": "DeepSeek Filter & Format Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        464,
+        16
+      ],
+      "parameters": {
+        "authentication": "none",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Fetch User Config').first().json.config.deepseek_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "jsonBody": "={{ JSON.stringify($json.deepseek_body) }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendHeaders": true,
+        "specifyBody": "json",
+        "url": "https://api.deepseek.com/responses"
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "deepSeekApi": {
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "id": "905ae292-5243-4e5a-8d7c-5b6636cd76f2",
+      "name": "Build Search Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        16
+      ],
+      "parameters": {
+        "jsCode": "function getWebConfig() {\n  const fetchNode = $('Fetch User Config').first()?.json;\n  if (fetchNode?.config) return fetchNode.config;\n  const legacy = $('Get Search Config').first()?.json;\n  return legacy?.config ?? legacy ?? {};\n}\n\nconst cfg = getWebConfig();\nconst queries = Array.isArray(cfg.search_queries) ? cfg.search_queries : [];\nconst baseUrl = String(cfg.searxng_base_url || 'http://152.53.157.68:8080/search').replace(/\\/$/, '');\n\nif (queries.length === 0) {\n  throw new Error('No search queries configured. Add them in jobs.mubu.dev/settings → Job Search.');\n}\n\nreturn queries.map(query => ({\n  json: {\n    query,\n    search_url: baseUrl + '?q=' + encodeURIComponent(query) + '&format=json&language=de-DE'\n  }\n}));"
+      }
+    },
+    {
+      "id": "e827f3ac-a0b2-4629-9c80-8049ddda9aaf",
+      "name": "Merge SearXNG Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        16
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst merged = [];\nconst seen = new Set();\n\nfor (const item of items) {\n  const results = item.json.results ?? [];\n  for (const result of results) {\n    const url = String(result.url ?? '').trim();\n    if (!url || seen.has(url)) continue;\n    seen.add(url);\n    merged.push(result);\n  }\n}\n\nreturn [{\n  json: {\n    results: merged,\n    search_query_count: items.length,\n    raw_result_count: merged.length\n  }\n}];"
+      }
+    },
+    {
+      "id": "ef7cc289-eaee-41a4-be0f-5cb82258e7d2",
+      "name": "Build DeepSeek Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        16
+      ],
+      "parameters": {
+        "jsCode": "function getWebConfig() {\n  const fetchNode = $('Fetch User Config').first()?.json;\n  if (fetchNode?.config) return fetchNode.config;\n  if (fetchNode?.user_id) return fetchNode;\n  const legacy = $('Get Search Config').first()?.json;\n  return legacy?.config ?? legacy ?? {};\n}\n\nconst cfg = getWebConfig();\nconst results = $input.first().json.results ?? [];\n\nconst slimResults = results.map(r => ({\n  title: r.title,\n  content: r.content,\n  url: r.url,\n  score: r.score\n}));\n\nconst roleKeywords = String(cfg.role_keywords || 'Werkstudent / Working Student');\nconst techFocus = String(cfg.tech_focus || 'software development, Python, React, AI');\nconst maxJobs = Math.min(Math.max(Number(cfg.max_jobs_per_run) || 20, 1), 50);\nconst locations = Array.isArray(cfg.preferred_locations) ? cfg.preferred_locations : ['Köln', 'Cologne'];\nconst locationHint = locations.slice(0, 3).join(', ');\nconst allowRemote = cfg.allow_remote_outside_locations !== false;\n\nconst locationRules =\n  `Jobs in ${locationHint} may be onsite, hybrid or remote. ` +\n  (allowRemote\n    ? 'Jobs outside those locations should only be included when the search result clearly indicates remote work from Germany. '\n    : 'Only include jobs in the preferred locations. ');\n\nconst payload = {\n  model: 'deepseek-v4-flash',\n  reasoning: { effort: 'none' },\n  max_output_tokens: 6000,\n  instructions:\n    'You are a job result extraction and selection agent. You receive search results from SearXNG. ' +\n    `Extract actual ${roleKeywords} job postings relevant to computer science. ` +\n    `Prefer ${techFocus}. ` +\n    'Exclude internships, full-time jobs and clearly irrelevant results. ' +\n    'Every returned job MUST have a URL that points to the individual job posting itself. ' +\n    'NEVER return URLs that point only to search result pages, job category pages, career overview pages, ' +\n    'company homepages, generic job-board pages, or pages containing multiple different job postings. ' +\n    'If no specific individual job posting URL can be identified, DO NOT return that job. ' +\n    'Employer diversity is very important. Return a maximum of 2 jobs from the same employer or company group. ' +\n    'Detect duplicate or near-duplicate job postings and return each position only once. ' +\n    `Aim to return up to ${maxJobs} useful jobs if enough suitable jobs exist. ` +\n    'Do not invent information. If location cannot be determined, use unknown. ' +\n    'For work_mode use unknown when necessary. A job URL must never be unknown; exclude the job instead. ' +\n    'Return only the structured JSON output.',\n  input:\n    `Analyze the following SearXNG search results and extract relevant ${roleKeywords} jobs. ` +\n    locationRules +\n    'Create a diverse selection across employers. For every actual job posting return title, company, location, work_mode and URL.\\n\\n' +\n    'SEARXNG RESULTS:\\n\\n' +\n    JSON.stringify(slimResults),\n  text: {\n    format: {\n      type: 'json_schema',\n      name: 'job_search_results',\n      strict: true,\n      schema: {\n        type: 'object',\n        properties: {\n          jobs: {\n            type: 'array',\n            maxItems: maxJobs,\n            items: {\n              type: 'object',\n              properties: {\n                title: { type: 'string' },\n                company: { type: 'string' },\n                location: { type: 'string' },\n                work_mode: {\n                  type: 'string',\n                  enum: ['onsite', 'hybrid', 'remote', 'unknown']\n                },\n                url: { type: 'string' }\n              },\n              required: ['title', 'company', 'location', 'work_mode', 'url'],\n              additionalProperties: false\n            }\n          }\n        },\n        required: ['jobs'],\n        additionalProperties: false\n      }\n    }\n  }\n};\n\nreturn [{ json: { deepseek_body: payload } }];"
+      }
+    },
+    {
+      "id": "601ed388-96e3-4793-b334-f5ca475d4e46",
+      "name": "Parse Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst candidates = [];\n\nif (Array.isArray(response.output)) {\n  for (const item of response.output) {\n    if (!Array.isArray(item.content)) continue;\n    for (const content of item.content) {\n      if (typeof content.text === 'string') candidates.push(content.text);\n      if (typeof content.output_text === 'string') candidates.push(content.output_text);\n    }\n  }\n}\n\nif (Array.isArray(response.choices)) {\n  for (const choice of response.choices) {\n    const content = choice?.message?.content;\n    if (typeof content === 'string') candidates.push(content);\n  }\n}\n\nif (typeof response.content === 'string') candidates.push(response.content);\nif (typeof response.text === 'string') candidates.push(response.text);\n\nif (candidates.length === 0) {\n  return [];\n}\n\nlet parsed = null;\nlet lastError = null;\n\nfor (const candidate of candidates) {\n  try {\n    let text = candidate.trim()\n      .replace(/^\\`\\`\\`(?:json)?\\s*/i, '')\n      .replace(/\\s*\\`\\`\\`$/i, '')\n      .trim();\n\n    const firstBrace = text.indexOf('{');\n    const lastBrace = text.lastIndexOf('}');\n    if (firstBrace !== -1 && lastBrace !== -1) {\n      text = text.slice(firstBrace, lastBrace + 1);\n    }\n\n    const result = JSON.parse(text);\n    if (Array.isArray(result.jobs)) {\n      parsed = result;\n      break;\n    }\n  } catch (error) {\n    lastError = error;\n  }\n}\n\nif (!parsed || !Array.isArray(parsed.jobs) || parsed.jobs.length === 0) {\n  return [];\n}\n\nreturn parsed.jobs.map(job => ({\n  json: {\n    title: job.title ?? '',\n    company: job.company ?? '',\n    location: job.location ?? 'unknown',\n    work_mode: job.work_mode ?? 'unknown',\n    url: job.url ?? ''\n  }\n}));"
+      }
+    },
+    {
+      "id": "41562dee-af45-4835-bda7-bf1b0cd8b528",
+      "name": "location_filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function getWebConfig() {\n  const fetchNode = $('Fetch User Config').first()?.json;\n  if (fetchNode?.config) return fetchNode.config;\n  const legacy = $('Get Search Config').first()?.json;\n  return legacy?.config ?? legacy ?? {};\n}\n\nconst cfg = getWebConfig();\nconst items = $input.all();\n\nfunction normText(value) {\n  return String(value ?? '')\n    .toLowerCase()\n    .replace(/ä/g, 'a')\n    .replace(/ö/g, 'o')\n    .replace(/ü/g, 'u')\n    .replace(/ß/g, 'ss')\n    .trim();\n}\n\nconst preferred = (Array.isArray(cfg.preferred_locations) ? cfg.preferred_locations : [])\n  .map(normText)\n  .filter(Boolean);\n\nconst allowRemote = cfg.allow_remote_outside_locations !== false;\n\nreturn items.filter(item => {\n  const job = item.json;\n  const location = normText(job.location);\n  const workMode = normText(job.work_mode);\n\n  const isPreferred = preferred.some(place => location.includes(place));\n  if (isPreferred) return true;\n\n  const isRemote =\n    workMode === 'remote' ||\n    workMode === 'fully remote' ||\n    workMode.includes('fully remote');\n\n  if (allowRemote && isRemote) return true;\n\n  return false;\n});"
+      }
+    },
+    {
+      "id": "ee88d43f-a299-4cc4-9b19-7ea19a59f988",
+      "name": "Semantic Dedupe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function normText(value) {\n  return String(value ?? '')\n    .toLowerCase()\n    .replace(/ä/g, 'a')\n    .replace(/ö/g, 'o')\n    .replace(/ü/g, 'u')\n    .replace(/ß/g, 'ss')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n}\n\nfunction normCompany(value) {\n  return normText(value)\n    .replace(/\\b(gmbh|ag|kg|co|inc|ltd|group|gruppe|se|mbh)\\b/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction normUrl(url) {\n  try {\n    const parsed = new URL(String(url).trim());\n    parsed.hash = '';\n    parsed.search = '';\n    const path = parsed.pathname.replace(/\\/+$/, '');\n    return (parsed.hostname.replace(/^www\\./, '') + path).toLowerCase();\n  } catch (error) {\n    return normText(url);\n  }\n}\n\nfunction fingerprint(job) {\n  const urlKey = normUrl(job.url);\n  if (urlKey.length > 8) {\n    return 'url:' + urlKey;\n  }\n  const company = normCompany(job.company);\n  const title = normText(job.title);\n  return 'tc:' + company + '|' + title;\n}\n\nconst seen = new Set();\n\nreturn $input.all().filter(item => {\n  const key = fingerprint(item.json);\n  if (!key || key === 'tc:|') {\n    return Boolean(String(item.json.title ?? '').trim() && String(item.json.company ?? '').trim());\n  }\n  if (seen.has(key)) {\n    return false;\n  }\n  seen.add(key);\n  return true;\n});"
+      }
+    },
+    {
+      "id": "a7a32412-52e6-4b9e-8266-6bde82019005",
+      "name": "Remove Duplicates1",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        16
+      ],
+      "parameters": {
+        "compare": "selectedFields",
+        "fieldsToCompare": "title, company",
+        "options": {}
+      }
+    },
+    {
+      "id": "0e1aa4f4-ae7d-4416-adac-1b56d8d4a66b",
+      "name": "Check Job Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1280,
+        16
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  $1::text AS title,\n  $2::text AS company,\n  $3::text AS location,\n  $4::text AS work_mode,\n  $5::text AS url,\n\n  check_result.should_skip,\n  check_result.reason,\n  check_result.job_id,\n  check_result.status,\n  check_result.last_seen_at,\n  check_result.match_score\n\nFROM public.should_skip_ai_analysis(\n  NULLIF($5::text, ''),\n  public.compute_job_fingerprint(\n    $2::text,\n    $1::text\n  )\n) AS check_result;",
+        "options": {
+          "queryReplacement": "={{ [   $json.title ?? '',   $json.company ?? '',   $json.location ?? '',   $json.work_mode ?? 'unknown',   $json.url ?? '' ] }}"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "c8c0a3e5-2fbf-4d2c-96ef-9ca790c16a3c",
+      "name": "Already Known?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1504,
+        16
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "e45d431c-b10a-4d46-b7c2-dbd9f83ab03e",
+              "leftValue": "={{ $json.should_skip }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1682f4e7-5e1b-4b4a-951d-2661a9596ec3",
+      "name": "Update Last Seen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1728,
+        -128
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ [$json.job_id] }}"
+        },
+        "query": "SELECT *\nFROM public.touch_job_last_seen($1::uuid);"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "b85fc854-9be5-4aee-978d-08ba68829626",
+      "name": "Call 'Job Analyzer (Web Config)'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1728,
+        32
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "cachedResultName": "Job Analyzer (Web Config)",
+          "cachedResultUrl": "/workflow/inw6qMHWkng6OdKs",
+          "mode": "list",
+          "value": "inw6qMHWkng6OdKs"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "url"
+          ],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "url",
+              "id": "url",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "title",
+              "id": "title",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "company",
+              "id": "company",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "location",
+              "id": "location",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "remote_option",
+              "id": "remote_option",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "employment_type",
+              "id": "employment_type",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "job_description",
+              "id": "job_description",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "date_posted",
+              "id": "date_posted",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "source_url",
+              "id": "source_url",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "company": "={{ $json.company }}",
+            "date_posted": "={{ $json.date_posted }}",
+            "employment_type": "={{ $json.employment_type }}",
+            "job_description": "={{ $json.job_description }}",
+            "location": "={{ $json.location }}",
+            "remote_option": "={{ $json.work_mode ?? $json.remote_option ?? '' }}",
+            "source_url": "={{ $json.source_url ?? $json.url ?? '' }}",
+            "title": "={{ $json.title }}",
+            "url": "={{ $json.url }}"
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "35022720-ecc3-470c-88ca-0e04aa908f98",
+      "name": "Prepare Job for Database",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        32
+      ],
+      "parameters": {
+        "jsCode": "return $input.all()\n  .filter(item => {\n    const j = item.json;\n    const title = String(j.job_title ?? j.title ?? '').trim();\n    const company = String(j.company ?? '').trim();\n    return title.length > 0 && company.length > 0;\n  })\n  .map(item => {\n  const j = item.json;\n  const m = j.match ?? {};\n  const arr = v => Array.isArray(v) ? v : [];\n  const statusText = [j.job_title, j.job_description].filter(Boolean).join(' ').toLowerCase();\n  const expiredPhrases = ['this vacancy has now expired','vacancy has expired','position has been filled','position is no longer available','job is no longer available','stelle bereits besetzt','stelle ist bereits besetzt','stelle wurde bereits besetzt','stelle ist besetzt','stelle nicht mehr verfügbar','position nicht mehr verfügbar'];\n  const isExpired = expiredPhrases.some(phrase => statusText.includes(phrase));\n  const score = m.score != null && !isNaN(Number(m.score)) ? Number(m.score) : (j.match_score != null && !isNaN(Number(j.match_score)) ? Number(j.match_score) : null);\n  const uid = $('Fetch User Config').first()?.json?.user_id ?? null;\n  return { json: { user_id: uid, job_title: j.job_title ?? j.title ?? '', company: j.company ?? '', location: j.location ?? null, url: j.url || null, source_url: j.source_url || j.url || null, remote_option: j.remote_option ?? j.work_mode ?? null, home_office_available: typeof j.home_office_available === 'boolean' ? j.home_office_available : null, employment_type: j.employment_type ?? null, weekly_hours: j.weekly_hours != null && !isNaN(Number(j.weekly_hours)) ? Number(j.weekly_hours) : null, start_date: j.start_date ?? null, date_posted: /^\\d{4}-\\d{2}-\\d{2}$/.test(j.date_posted ?? '') ? j.date_posted : null, job_description: j.job_description ?? null, required_technologies: arr(j.required_technologies), preferred_technologies: arr(j.preferred_technologies), required_requirements: arr(j.required_requirements), preferred_requirements: arr(j.preferred_requirements), tasks: arr(j.tasks), degree_fields: arr(j.degree_fields), required_languages: arr(j.required_languages), preferred_languages: arr(j.preferred_languages), minimum_semester: j.minimum_semester != null && !isNaN(Number(j.minimum_semester)) ? Number(j.minimum_semester) : null, previous_work_experience_required: j.previous_work_experience_required === true, student_required: typeof j.student_required === 'boolean' ? j.student_required : null, required_experience: j.required_experience ?? null, match_score: score, match_recommendation: m.recommendation ?? j.match_recommendation ?? null, matched_required_technologies: arr(m.matched_required_technologies), matched_preferred_technologies: arr(m.matched_preferred_technologies), missing_required_technologies: arr(m.missing_required_technologies), matched_technical_areas: arr(m.matched_technical_areas), match_positives: arr(m.positives), match_warnings: arr(m.warnings), analysis_status: j.analysis_status ?? null, fetch_status_code: j.fetch_status_code ?? null, extraction_error: j.extraction_error ?? null, status: isExpired ? 'expired' : 'new' } };\n});"
+      }
+    },
+    {
+      "id": "7c63ecae-0f20-46ea-bea2-af3beaf60759",
+      "name": "Save Job to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2176,
+        32
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        },
+        "query": "SELECT *\nFROM public.save_job_safe($1::jsonb);"
+      },
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "0da88134-1aeb-45da-b0c9-e583a5ebe45a",
+      "name": "Mark New1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2384,
+        32
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "29ee385c-3039-4ab5-acc9-12bdc4c5895f",
+              "name": "_was_new",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "7c145587-bf78-4ec0-a807-52f8a0d1276c",
+      "name": "Mark Existing",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1952,
+        -128
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "29ee385c-3039-4ab5-acc9-12bdc4c5895f",
+              "name": "_was_new",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "9d084905-baa4-49a0-81f8-b9b6d2818952",
+      "name": "Filter",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        2576,
+        16
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "2945f6c7-13b6-4550-8dcf-fb834520ed24",
+              "leftValue": "={{ $json.match_score }}",
+              "operator": {
+                "operation": "gte",
+                "type": "number"
+              },
+              "rightValue": "={{ $('Get Search Config').first().json.config.min_match_score ?? 40 }}"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a34a54c4-c913-4c04-91b5-1e1bed0556df",
+      "name": "Sort",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        -16
+      ],
+      "parameters": {
+        "options": {},
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "match_score",
+              "order": "descending"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4b277e7f-72b3-498f-9d65-51df574a0c0e",
+      "name": "Remove Duplicates",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        3024,
+        -16
+      ],
+      "parameters": {
+        "dedupeValue": "={{ (function(){\n  function norm(v){return String(v??'').toLowerCase().trim();}\n  function normUrl(url){\n    try{\n      const u=new URL(String(url).trim());\n      u.hash=''; u.search='';\n      return (u.hostname.replace(/^www\\./,'')+u.pathname.replace(/\\/+$/, '')).toLowerCase();\n    }catch(e){return norm(url);} \n  }\n  const company=norm($json.company ?? '');\n  const title=norm($json.job_title ?? $json.title ?? '');\n  const url=normUrl($json.url ?? $json.source_url ?? '');\n  if(url.length>8) return url;\n  return company+'|'+title;\n})() }}",
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "options": {}
+      }
+    },
+    {
+      "id": "87f7bd7f-26c6-4356-a8d2-20d972906f74",
+      "name": "Collect Processed Jobs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2576,
+        -224
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "4bf9546f-5860-4ece-974f-05b1e5bc5414",
+      "name": "Build Search Run Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        -208
+      ],
+      "parameters": {
+        "jsCode": "function safeItems(nodeName) {\n  try {\n    return $items(nodeName);\n  } catch (error) {\n    return [];\n  }\n}\n\nconst processed = $input.all();\nconst newJobs = processed.filter(item => item.json._was_new === true).length;\nconst existingJobs = processed.filter(item => item.json._was_new === false).length;\n\nconst searxMerged = safeItems('Merge SearXNG Results')[0]?.json ?? safeItems('SearXNG Search')[0]?.json ?? {};\nconst searchRun = safeItems('Create Search Run')[0]?.json ?? {};\n\nconst resultsFound = Array.isArray(searxMerged.results) ? searxMerged.results.length : 0;\nconst searchQueryCount = searxMerged.search_query_count ?? safeItems('Build Search Queries').length ?? 1;\nconst parsedJobs = safeItems('Parse Jobs').length;\nconst afterLocation = safeItems('location_filter').length;\nconst afterSemantic = safeItems('Semantic Dedupe').length;\nconst afterDedupe = safeItems('Remove Duplicates1').length;\n\nconst jobsLocationFiltered = Math.max(0, parsedJobs - afterLocation);\nconst jobsSemanticDeduped = Math.max(0, afterLocation - afterSemantic);\nconst jobsTitleCompanyDeduped = Math.max(0, afterSemantic - afterDedupe);\n\nconst analysisFailed = processed.filter(item =>\n  item.json._was_new === true &&\n  (item.json.analysis_status === 'fetch_failed' || item.json.analysis_status === 'extraction_failed')\n).length;\n\nconst minScore = Number($('Get Search Config').first().json.config?.min_match_score ?? 40);\n\nconst scoreFiltered = processed.filter(item => {\n  if (item.json._was_new !== true) return false;\n  const score = Number(item.json.match_score ?? item.json.match?.score);\n  return !Number.isNaN(score) && score < minScore;\n}).length;\n\nreturn [{\n  json: {\n    search_run_id: searchRun.id,\n    results_found: resultsFound,\n    search_query_count: searchQueryCount,\n    parsed_jobs: parsedJobs,\n    jobs_location_filtered: jobsLocationFiltered,\n    jobs_semantic_deduped: jobsSemanticDeduped,\n    jobs_deduped_pre_db: jobsTitleCompanyDeduped,\n    new_jobs_found: newJobs,\n    jobs_analyzed: newJobs,\n    existing_jobs_seen: existingJobs,\n    analysis_failed: analysisFailed,\n    score_filtered: scoreFiltered,\n    processed_jobs: processed.length\n  }\n}];"
+      }
+    },
+    {
+      "id": "6a41224c-a6a9-47c2-9461-b84798100f11",
+      "name": "Ensure Search Run Columns",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2832,
+        -208
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "ALTER TABLE public.search_runs\n  ADD COLUMN IF NOT EXISTS existing_jobs_seen integer,\n  ADD COLUMN IF NOT EXISTS run_details jsonb;"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "a7130ae9-dcad-4cc6-a7ab-32b864b4877b",
+      "name": "Complete Search Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3072,
+        -208
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ [\n  $json.search_run_id,\n  $json.results_found,\n  $json.new_jobs_found,\n  $json.jobs_analyzed,\n  $json.existing_jobs_seen,\n  JSON.stringify({\n    parsed_jobs: $json.parsed_jobs,\n    jobs_location_filtered: $json.jobs_location_filtered,\n    jobs_deduped_pre_db: $json.jobs_deduped_pre_db,\n    analysis_failed: $json.analysis_failed,\n    score_filtered: $json.score_filtered,\n    processed_jobs: $json.processed_jobs,\n    search_query_count: $json.search_query_count ?? null\n  })\n] }}"
+        },
+        "query": "UPDATE public.search_runs\nSET\n  finished_at = timezone('utc', now()),\n  status = 'completed',\n  results_found = $2::integer,\n  new_jobs_found = $3::integer,\n  jobs_analyzed = $4::integer,\n  existing_jobs_seen = $5::integer,\n  run_details = $6::jsonb\nWHERE id = $1::uuid\nRETURNING *;"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "684a86a3-9de8-427a-92a0-10f5de7ccfc5",
+      "name": "Get Search Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -96,
+        -120
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "SELECT get_search_config() AS config;"
+      },
+      "executeOnce": true,
+      "disabled": true,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "f136cc7d-eb9d-4bb5-90d7-2901c09c05c8",
+      "name": "Fetch User Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        16
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://YOUR_DOMAIN/api/n8n/user-config?user_id=YOUR_USER_UUID",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Secret",
+              "value": "YOUR_N8N_INTERNAL_SECRET"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Build Search Queries": {
+      "main": [
+        [
+          {
+            "node": "SearXNG Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SearXNG Search": {
+      "main": [
+        [
+          {
+            "node": "Merge SearXNG Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge SearXNG Results": {
+      "main": [
+        [
+          {
+            "node": "Build DeepSeek Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build DeepSeek Body": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek Filter & Format Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Filter & Format Jobs": {
+      "main": [
+        [
+          {
+            "node": "Parse Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Jobs": {
+      "main": [
+        [
+          {
+            "node": "location_filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "location_filter": {
+      "main": [
+        [
+          {
+            "node": "Semantic Dedupe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Semantic Dedupe": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates1": {
+      "main": [
+        [
+          {
+            "node": "Check Job Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Job Database": {
+      "main": [
+        [
+          {
+            "node": "Already Known?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Known?": {
+      "main": [
+        [
+          {
+            "node": "Update Last Seen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call 'Job Analyzer (Web Config)'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Job for Database": {
+      "main": [
+        [
+          {
+            "node": "Save Job to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Job to Database": {
+      "main": [
+        [
+          {
+            "node": "Mark New1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Last Seen": {
+      "main": [
+        [
+          {
+            "node": "Mark Existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark New1": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Collect Processed Jobs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Mark Existing": {
+      "main": [
+        [
+          {
+            "node": "Collect Processed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Sort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Processed Jobs": {
+      "main": [
+        [
+          {
+            "node": "Build Search Run Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Run Stats": {
+      "main": [
+        [
+          {
+            "node": "Ensure Search Run Columns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure Search Run Columns": {
+      "main": [
+        [
+          {
+            "node": "Complete Search Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Job Analyzer (Web Config)'": {
+      "main": [
+        [
+          {
+            "node": "Prepare Job for Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Config": {
+      "main": [
+        [
+          {
+            "node": "Create Search Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Search Run": {
+      "main": [
+        [
+          {
+            "node": "Build Search Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "meta": {
+    "sourceId": "ROTREzXrgqrC8ffZ",
+    "role": "Per-user job search template (Web Config)",
+    "exportedAt": "2026-08-30T02:48:19.184Z",
+    "importNote": "After import: re-map Postgres/OpenAI/DeepSeek credentials, set Fetch User Config URL + user_id, publish workflow."
+  }
+}

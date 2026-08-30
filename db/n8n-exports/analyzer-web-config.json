@@ -1,0 +1,627 @@
+{
+  "name": "Job Analyzer (Web Config)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "url"
+            },
+            {
+              "name": "title"
+            },
+            {
+              "name": "company"
+            },
+            {
+              "name": "location"
+            },
+            {
+              "name": "remote_option"
+            },
+            {
+              "name": "employment_type"
+            },
+            {
+              "name": "job_description"
+            },
+            {
+              "name": "date_posted"
+            },
+            {
+              "name": "source_url"
+            }
+          ]
+        }
+      },
+      "id": "1102eef1-8d83-409a-8bdd-642b8dedd59a",
+      "name": "Analyzer Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.content }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"job_title\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Official job title. Prefer the job posting. If unavailable there, use provided job finder metadata. Otherwise null.\"\n    },\n    \"company\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Company name. Prefer the job posting. If unavailable there, use provided job finder metadata. Otherwise null.\"\n    },\n    \"location\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Actual job location. Prefer the job posting. If unavailable there, use provided job finder metadata. Otherwise null.\"\n    },\n    \"remote_option\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"On-site\",\n        \"Hybrid\",\n        \"Remote\",\n        \"Unknown\"\n      ],\n      \"description\": \"Work location model. Prefer information from the posting. If unavailable, use provided job finder metadata. Return exactly On-site, Hybrid, Remote, or Unknown.\"\n    },\n    \"home_office_available\": {\n      \"anyOf\": [\n        { \"type\": \"boolean\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"True if home office is explicitly available, false if explicitly unavailable, otherwise null.\"\n    },\n    \"employment_type\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Employment type. Prefer the job posting. If unavailable there, use provided job finder metadata. Otherwise null.\"\n    },\n    \"weekly_hours\": {\n      \"anyOf\": [\n        { \"type\": \"number\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Weekly working hours as a number only if stated. Otherwise null.\"\n    },\n    \"start_date\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Start date if stated. Otherwise null.\"\n    },\n    \"required_technologies\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Technologies, programming languages, frameworks, databases, cloud platforms or technical tools that the candidate is explicitly expected or required to know. Return [] only if none can be identified.\"\n    },\n    \"preferred_technologies\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Technologies, programming languages, frameworks or technical tools described as preferred, beneficial, advantageous, useful or nice-to-have. Return [] if none can be identified.\"\n    },\n    \"required_requirements\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Mandatory non-technology requirements. Return [] if none are stated.\"\n    },\n    \"preferred_requirements\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Optional, preferred or nice-to-have non-technology requirements. Return [] if none are stated.\"\n    },\n    \"tasks\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Concrete responsibilities and tasks from the job. Extract technical responsibilities in particular. If a job finder description is provided, use it when the webpage content is incomplete.\"\n    },\n    \"degree_fields\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Accepted or required fields of study. Return [] if none are stated.\"\n    },\n    \"minimum_semester\": {\n      \"anyOf\": [\n        { \"type\": \"number\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Minimum university semester as a number if stated. Otherwise null.\"\n    },\n    \"previous_work_experience_required\": {\n      \"type\": \"boolean\",\n      \"description\": \"True ONLY when actual previous professional work experience is explicitly mandatory. University projects, private projects, coursework, internships or first practical experience alone must NOT count as required professional work experience.\"\n    },\n    \"required_experience\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Mandatory professional work experience requirement. Do not classify university projects, private projects or general first experience as professional work experience. Otherwise null.\"\n    },\n    \"required_languages\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Languages explicitly required, including level when available. Return [] if none are stated.\"\n    },\n    \"preferred_languages\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Languages explicitly preferred or optional. Return [] if none are stated.\"\n    },\n    \"student_required\": {\n      \"anyOf\": [\n        { \"type\": \"boolean\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"True if current university enrollment is explicitly required, false if explicitly not required, otherwise null.\"\n    },\n    \"url\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Direct job URL provided in the input. Never invent a URL.\"\n    },\n    \"source_url\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Source URL provided in the input. Never invent a URL.\"\n    },\n    \"job_description\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Job description or factual job summary supplied by the job finder. Preserve it when provided.\"\n    },\n    \"date_posted\": {\n      \"anyOf\": [\n        { \"type\": \"string\" },\n        { \"type\": \"null\" }\n      ],\n      \"description\": \"Posting date supplied by the posting or job finder. Otherwise null.\"\n    }\n  },\n  \"required\": [\n    \"job_title\",\n    \"company\",\n    \"location\",\n    \"remote_option\",\n    \"home_office_available\",\n    \"employment_type\",\n    \"weekly_hours\",\n    \"start_date\",\n    \"required_technologies\",\n    \"preferred_technologies\",\n    \"required_requirements\",\n    \"preferred_requirements\",\n    \"tasks\",\n    \"degree_fields\",\n    \"minimum_semester\",\n    \"previous_work_experience_required\",\n    \"required_experience\",\n    \"required_languages\",\n    \"preferred_languages\",\n    \"student_required\",\n    \"url\",\n    \"source_url\",\n    \"job_description\",\n    \"date_posted\"\n  ]\n}",
+        "options": {
+          "systemPromptTemplate": "You are a strict factual information extractor for job advertisements.\n\nYour task is ONLY to extract information explicitly stated or clearly implied by the job advertisement.\n\nDO NOT evaluate whether the job is good.\nDO NOT rate relevance.\nDO NOT guess missing information.\nDO NOT infer dates, locations, experience requirements, languages, technologies, or degree requirements that are not stated.\n\nThe advertisement may be written in German or English. Understand both languages.\n\nReturn normalized English text, but preserve:\n- company names\n- city names\n- technology names\n- product names\n- official job titles when appropriate\n\n\nSTRICT RULES\n\n\n1. OUTPUT FORMAT AND DATA TYPES\n\nFollow the required output schema EXACTLY.\n\nDo not add fields that are not part of the schema.\nDo not remove required fields from the schema.\nDo not wrap the result in Markdown.\nDo not use ```json code fences.\nDo not include explanations before or after the structured output.\n\nFor missing information:\n\n- Optional text field -> null\n- Array field -> []\n- Optional numeric field -> null\n- Optional boolean field -> null when the information cannot be determined\n\nNEVER return strings such as:\n- \"unknown\"\n- \"N/A\"\n- \"not specified\"\n- \"-\"\n- \"none\"\n\nfor fields that expect numbers, booleans, arrays, or null.\n\nNever return null for an array field.\nIf an array contains no valid values, return [].\n\n\n2. TECHNOLOGIES\n\nrequired_technologies and preferred_technologies may ONLY contain identifiable technologies, tools, programming languages, frameworks, platforms, databases, cloud services, libraries, or technical products.\n\nValid examples:\nPython\nJava\nPyTorch\nReact\nGit\nDocker\nAWS\nAzure\nn8n\nPower Automate\nSQL\nJavaScript\nPostgreSQL\nKubernetes\nLangChain\n\nINVALID examples:\nExperience with automation\nInterest in AI\nAnalytical thinking\nWillingness to learn\nLow-code development experience\nSoftware development knowledge\nTechnical understanding\nMachine learning experience\n\nThose belong under requirements instead.\n\nDo not invent technologies merely because they are commonly used for a task.\n\n\n3. REQUIRED VS PREFERRED\n\nTreat something as required only when the advertisement indicates that it is mandatory, expected, or clearly part of the required candidate profile.\n\nExamples of preferred wording:\n\"nice to have\"\n\"von Vorteil\"\n\"wünschenswert\"\n\"idealerweise\"\n\"preferred\"\n\"plus\"\n\"bonus\"\n\"ideally\"\n\"an advantage\"\n\nThese MUST NOT be classified as required.\n\nPlace them under the corresponding preferred field instead.\n\n\n4. MISSING INFORMATION\n\nNever invent missing information.\n\nIf no exact or explicitly stated start date exists:\nstart_date = null\n\nIf working hours are not stated:\nweekly_hours = null\n\nIf location is not stated:\nlocation = null\n\nIf no minimum semester is stated:\nminimum_semester = null\n\nIf languages are not explicitly mentioned:\nrequired_languages = []\npreferred_languages = []\n\nIf no technologies are explicitly identifiable:\nrequired_technologies = []\npreferred_technologies = []\n\nIf requirements are not stated:\nrequired_requirements = []\npreferred_requirements = []\n\nIf tasks are not stated:\ntasks = []\n\nIf degree fields are not stated:\ndegree_fields = []\n\n\n5. WEEKLY HOURS\n\nweekly_hours must contain ONLY one numeric value.\n\nValid:\n20\n15\n10\n\nIf the advertisement gives a range such as:\n\"15-20 hours\"\n\"10 to 20 hours per week\"\n\"between 15 and 20 hours\"\n\nreturn:\nweekly_hours = null\n\nDo NOT return:\n\"15-20\"\n\"20 hours\"\n\"up to 20\"\n\"flexible\"\n\nNever convert a range into an assumed single value.\n\n\n6. MINIMUM SEMESTER\n\nminimum_semester must be an integer or null.\n\nExamples:\n\n\"from the 3rd semester\"\n-> 3\n\n\"at least in the second semester\"\n-> 2\n\nIf no explicit minimum semester is given:\nminimum_semester = null\n\nDo not infer a semester from degree type, age, experience, or responsibilities.\n\n\n7. START DATE\n\nOnly extract a start date when the advertisement explicitly provides one.\n\nDo NOT calculate or assume a date.\n\n\"As soon as possible\"\n\"zum nächstmöglichen Zeitpunkt\"\n\"ab sofort\"\n\nshould be normalized to:\n\n\"As soon as possible\"\n\nDo NOT convert this into a calendar date.\n\nIf a specific date is explicitly stated, preserve that date accurately.\n\n\n8. DATE POSTED\n\nOnly populate date_posted if the publication date is explicitly available in the supplied job advertisement or source content.\n\nIf a complete calendar date is available, return it in:\n\nYYYY-MM-DD\n\nformat.\n\nExample:\n\n25 August 2026\n-> 2026-08-25\n\nIf the date cannot be reliably determined:\ndate_posted = null\n\nDo not calculate publication dates from phrases such as:\n\"3 days ago\"\n\"last week\"\n\"recently\"\n\n\n9. EXPERIENCE\n\nprevious_work_experience_required should only be true if actual previous professional work experience is explicitly required.\n\nExamples that may qualify:\n\"2 years of professional experience required\"\n\"Berufserfahrung erforderlich\"\n\"previous professional experience is mandatory\"\n\nUniversity projects, coursework, personal projects, internships mentioned only as optional experience, interest, familiarity, or basic knowledge do NOT automatically count as required professional work experience.\n\nIf professional work experience is not required:\nprevious_work_experience_required = false\n\nrequired_experience should contain only explicitly stated experience requirements.\n\nDo not invent years of experience.\n\n\n10. STUDENT STATUS\n\nstudent_required should be:\n\ntrue\n- only when enrollment or active student status is explicitly required\n\nExamples:\n\"currently enrolled student\"\n\"immatrikulierte:r Student:in\"\n\"you are currently studying\"\n\nfalse\n- only when the advertisement explicitly indicates that student status is not required\n\nnull\n- when the advertisement does not make student status clear\n\nDo not infer student status solely from the job title.\n\n\n11. HOME OFFICE\n\nhome_office_available should be:\n\ntrue\n- when home office, remote work, mobile work, or working from home is explicitly available\n\nfalse\n- only when the advertisement explicitly states that remote/home-office work is not available or the position must be fully on-site\n\nnull\n- when this cannot be determined\n\n\n12. REMOTE OPTION\n\nFor remote_option use ONLY one of these values:\n\n\"On-site\"\n\"Hybrid\"\n\"Remote\"\n\"Unknown\"\n\nUse:\n\n\"Remote\"\n- when the job can clearly be performed remotely\n\n\"Hybrid\"\n- when both remote/mobile work and on-site presence are part of the role\n\n\"On-site\"\n- when the position is clearly performed on location\n\n\"Unknown\"\n- when the advertisement does not provide enough information\n\nDo not infer remote work from flexible working hours.\n\n\n13. LANGUAGES\n\nOnly extract languages when explicitly stated.\n\nExamples:\n\n\"Fluent German required\"\n-> required_languages: [\"German (fluent)\"]\n\n\"Good English skills are a plus\"\n-> preferred_languages: [\"English (good)\"]\n\nDo not assume German simply because the advertisement is written in German.\n\nDo not assume English because technologies or company names are English.\n\n\n14. DEGREE REQUIREMENTS\n\ndegree_fields may contain only degree subjects explicitly named or clearly grouped by the advertisement.\n\nExample:\n\n\"Informatik, Wirtschaftsinformatik oder vergleichbarer Studiengang\"\n\nmay become:\n\n[\n  \"Computer Science\",\n  \"Business Informatics\",\n  \"Comparable degree program\"\n]\n\nDo not invent additional degree fields.\n\n\n15. TASKS\n\nExtract only actual responsibilities and activities of the position.\n\nExamples:\n- Develop Python applications\n- Build automated workflows\n- Analyze datasets\n- Maintain CI/CD pipelines\n- Develop frontend components\n\nDo not turn candidate requirements into tasks.\n\nFor example:\n\n\"Experience with Python\"\nis a requirement, NOT a task.\n\n\n16. REQUIREMENTS\n\nRequirements should describe candidate qualifications, skills, experience, education, or personal requirements.\n\nExamples:\n- Currently studying Computer Science\n- Fluent German\n- Experience with Python\n- Analytical working style\n\nDo not place responsibilities under requirements.\n\n\n17. URL FIELDS\n\nIf a job URL or source URL is explicitly provided, preserve it exactly.\n\nDo not invent, reconstruct, shorten, or modify URLs.\n\nIf no URL is available:\nurl = null\n\nIf no source URL is available:\nsource_url = null\n\n\n18. BOOLEAN VALUES\n\nBoolean fields must contain ONLY:\n\ntrue\nfalse\nnull\n\nwhen null is permitted by the schema.\n\nNever return:\n\n\"yes\"\n\"no\"\n\"unknown\"\n\"true\"\n\"false\"\n\nas strings.\n\n\n19. ARRAYS\n\nAll array fields must ALWAYS be arrays.\n\nThis applies especially to:\n\nrequired_technologies\npreferred_technologies\nrequired_requirements\npreferred_requirements\ntasks\ndegree_fields\nrequired_languages\npreferred_languages\n\nIf nothing is found, return:\n\n[]\n\nNever return:\n\nnull\n\"none\"\n\"unknown\"\n\"\"\n\n\n20. ACCURACY\n\nWhen uncertain, prefer null or [] instead of guessing.\n\nAccuracy is more important than filling every field.\n\nNever manufacture information to make the output appear more complete.\n\nBefore producing the final output, internally verify that every value matches the required schema data type."
+        }
+      },
+      "id": "b14b6762-48b6-42d1-b75e-9f70230b479f",
+      "name": "Information Extractor",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        1152,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "formTitle": "Job Analyzer",
+        "formDescription": "Paste a job url below.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Job URL",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8f92a991-1277-496b-a1b6-bf48b57a056e",
+      "name": "manual_job_url_Input",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -464,
+        -192
+      ],
+      "webhookId": "e1e5c277-309c-4af5-9759-f0a934dbce3b"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "de-DE,de;q=0.9,en;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        },
+        "parameters": {
+          "url": "={{ $('Analyzer Input').first().json.url }}"
+        }
+      },
+      "id": "f88e3290-af07-446a-a39d-a7c85a8f40b1",
+      "name": "pulls_the_url",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function getMatchConfig() {\n  const fetchNode = $('Fetch User Config').first()?.json;\n  if (fetchNode?.config) return fetchNode.config;\n  const legacy = ($('Get Match Config').first()?.json ?? $('Get Search Config').first()?.json);\n  return legacy?.config ?? legacy ?? {};\n}\n\nconst rawCfg = getMatchConfig();\nconst profile = {\n  skills: Array.isArray(rawCfg.match_skills) ? rawCfg.match_skills : [],\n  preferredLocations: Array.isArray(rawCfg.preferred_locations) ? rawCfg.preferred_locations : [],\n  languages: Array.isArray(rawCfg.profile_languages) ? rawCfg.profile_languages : [],\n  wantsWorkingStudent: rawCfg.wants_working_student !== false\n};\n\nconst job = $json.output ?? $json;\n\n// ========================================\n// HELPER\n// ========================================\n\nconst norm = value =>\n  String(value ?? \"\")\n    .toLowerCase()\n    .replace(/ä/g, \"a\")\n    .replace(/ö/g, \"o\")\n    .replace(/ü/g, \"u\")\n    .replace(/ß/g, \"ss\")\n    .trim();\n\n\nconst arrayNorm = arr =>\n  Array.isArray(arr) ? arr.map(norm) : [];\n\n\nconst escapeRegex = value =>\n  value.replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\");\n\n\n// Wichtig:\n// Nicht mehr einfach text.includes(\"ai\").\n//\n// \"ai\" matched jetzt:\n// \"AI Engineer\" ✅\n//\n// aber NICHT:\n// \"maintenance\" ❌\n// \"email\" ❌\n// \"available\" ❌\n\nfunction containsTerm(text, term) {\n\n  const normalizedText = norm(text);\n  const normalizedTerm = norm(term);\n\n  if (!normalizedTerm) {\n    return false;\n  }\n\n  const escaped =\n    escapeRegex(normalizedTerm);\n\n  const regex =\n    new RegExp(\n      `(^|[^a-z0-9])${escaped}($|[^a-z0-9])`,\n      \"i\"\n    );\n\n  return regex.test(normalizedText);\n}\n\n\nfunction containsAny(text, terms) {\n\n  return terms.some(term =>\n    containsTerm(text, term)\n  );\n\n}\n\n\n// ========================================\n// TECHNOLOGY MATCHING\n// ========================================\n\nconst techAliases = {\n\n  python: [\n    \"python\"\n  ],\n\n  pytorch: [\n    \"pytorch\",\n    \"py torch\"\n  ],\n\n  git: [\n    \"git\",\n    \"github\",\n    \"gitlab\"\n  ],\n\n  react: [\n    \"react\",\n    \"reactjs\",\n    \"react.js\"\n  ],\n\n  javascript: [\n    \"javascript\",\n    \"js\",\n    \"ecmascript\"\n  ]\n\n};\n\n\nfunction matchesTechnology(\n  profileSkill,\n  jobTechnology\n) {\n\n  const skill =\n    norm(profileSkill);\n\n  const tech =\n    norm(jobTechnology);\n\n  const aliases =\n    techAliases[skill] ?? [skill];\n\n\n  return aliases.some(alias => {\n\n    const normalizedAlias =\n      norm(alias);\n\n    // Exakter Match\n    if (tech === normalizedAlias) {\n      return true;\n    }\n\n    // Längere Begriffe dürfen enthalten sein\n    // z.B. \"Python 3\"\n    if (\n      normalizedAlias.length >= 4 &&\n      containsTerm(\n        tech,\n        normalizedAlias\n      )\n    ) {\n      return true;\n    }\n\n    return false;\n  });\n\n}\n\n\n// ========================================\n// JOB TEXT\n// ========================================\n\nconst searchableJobText = [\n\n  job.job_title,\n  job.job_description,\n\n  ...(job.tasks || []),\n  ...(job.required_requirements || []),\n  ...(job.preferred_requirements || []),\n  ...(job.required_technologies || []),\n  ...(job.preferred_technologies || [])\n\n].join(\" \");\n\n\n// ========================================\n// TECHNISCHE INTERESSEN\n//\n// Kategorien statt einzelne Wörter,\n// damit z.B.\n//\n// React + JavaScript + Frontend\n//\n// nicht künstlich als drei komplett\n// unabhängige Interessen gewertet werden.\n// ========================================\n\nconst interestCategories = {\n\n  \"AI / ML\": [\n    \"ai\",\n    \"artificial intelligence\",\n    \"machine learning\",\n    \"generative ai\",\n    \"ai engineering\",\n    \"ai engineer\",\n    \"ai agents\",\n    \"ai agent\",\n    \"llm\",\n    \"pytorch\"\n  ],\n\n  \"Python\": [\n    \"python\",\n    \"django\",\n    \"flask\",\n    \"fastapi\"\n  ],\n\n  \"Software Development\": [\n    \"software development\",\n    \"software engineering\",\n    \"software developer\",\n    \"softwareentwickler\",\n    \"softwareentwicklung\",\n    \"programming\",\n    \"programmierung\"\n  ],\n\n  \"Frontend\": [\n    \"frontend\",\n    \"front-end\",\n    \"react\",\n    \"javascript\",\n    \"typescript\"\n  ],\n\n  \"Backend\": [\n    \"backend\",\n    \"back-end\",\n    \"api\",\n    \"node.js\",\n    \"nodejs\",\n    \"django\",\n    \"flask\",\n    \"fastapi\"\n  ],\n\n  \"Fullstack\": [\n    \"fullstack\",\n    \"full-stack\",\n    \"full stack\"\n  ],\n\n  \"Automation / QA\": [\n    \"automation\",\n    \"automatisierung\",\n    \"test automation\",\n    \"qa automation\",\n    \"quality assurance\",\n    \"software testing\"\n  ]\n\n};\n\n\n// ========================================\n// SCORE\n// ========================================\n\nlet score = 0;\n\nconst positives = [];\nconst warnings = [];\nconst missingSkills = [];\n\nif (job.analysis_status === 'fetch_failed') {\n  warnings.push('Job page could not be fetched; score based on limited metadata');\n}\n\nif (job.analysis_status === 'extraction_failed') {\n  warnings.push('Information extraction failed; score based on limited metadata');\n}\n\n\n\n// ========================================\n// 1. WERKSTUDENT / STUDENT FIT\n// MAX 20\n// ========================================\n\nconst employmentType =\n  norm(job.employment_type);\n\nconst title =\n  norm(job.job_title);\n\n\nconst isWorkingStudentRole =\n\n  containsTerm(\n    title,\n    \"werkstudent\"\n  ) ||\n\n  containsTerm(\n    title,\n    \"werkstudentin\"\n  ) ||\n\n  containsTerm(\n    title,\n    \"working student\"\n  ) ||\n\n  containsTerm(\n    title,\n    \"student assistant\"\n  ) ||\n\n  containsTerm(\n    title,\n    \"student employee\"\n  ) ||\n\n  containsTerm(\n    employmentType,\n    \"werkstudent\"\n  ) ||\n\n  containsTerm(\n    employmentType,\n    \"working student\"\n  ) ||\n\n  containsTerm(\n    employmentType,\n    \"student assistant\"\n  ) ||\n\n  containsTerm(\n    employmentType,\n    \"student employee\"\n  );\n\n\nif (isWorkingStudentRole) {\n\n  score += 15;\n\n  positives.push(\n    \"Working student position\"\n  );\n\n}\n\n\nif (job.student_required === true) {\n\n  score += 5;\n\n  positives.push(\n    \"Position explicitly targets students\"\n  );\n\n}\n\n\n// ========================================\n// 2. JOB CONTENT / INTEREST MATCH\n// MAX 25\n// ========================================\n\nconst matchedAreas = [];\n\n\nfor (\n  const [category, terms]\n  of Object.entries(interestCategories)\n) {\n\n  if (\n    containsAny(\n      searchableJobText,\n      terms\n    )\n  ) {\n\n    matchedAreas.push(\n      category\n    );\n\n  }\n\n}\n\n\n// 5 Punkte pro Kategorie\n// maximal 25\n\nconst interestScore =\n  Math.min(\n    matchedAreas.length * 5,\n    25\n  );\n\n\nscore += interestScore;\n\n\nif (matchedAreas.length > 0) {\n\n  positives.push(\n    \"Relevant areas: \" +\n    matchedAreas.join(\", \")\n  );\n\n}\n\n\n// ========================================\n// 3. TECHNOLOGY MATCH\n// MAX 25\n// ========================================\n\nconst requiredTech =\n  job.required_technologies || [];\n\nconst preferredTech =\n  job.preferred_technologies || [];\n\n\nconst matchedRequired = [];\nconst matchedPreferred = [];\n\n\nfor (const skill of profile.skills) {\n\n  if (\n    requiredTech.some(jobSkill =>\n      matchesTechnology(\n        skill,\n        jobSkill\n      )\n    )\n  ) {\n\n    matchedRequired.push(\n      norm(skill)\n    );\n\n  }\n\n\n  if (\n    preferredTech.some(jobSkill =>\n      matchesTechnology(\n        skill,\n        jobSkill\n      )\n    )\n  ) {\n\n    matchedPreferred.push(\n      norm(skill)\n    );\n\n  }\n\n}\n\n\n// Required Match = 10\n// Preferred Match = 5\n// maximal 25\n\nconst techScore =\n  Math.min(\n\n    matchedRequired.length * 10 +\n    matchedPreferred.length * 5,\n\n    25\n\n  );\n\n\nscore += techScore;\n\n\nif (matchedRequired.length > 0) {\n\n  positives.push(\n    \"Required technologies matched: \" +\n    matchedRequired.join(\", \")\n  );\n\n}\n\n\nif (matchedPreferred.length > 0) {\n\n  positives.push(\n    \"Preferred technologies matched: \" +\n    matchedPreferred.join(\", \")\n  );\n\n}\n\n\n// ========================================\n// NICHT GEMATCHTE TECHNOLOGIEN\n//\n// KEIN Punkteabzug.\n// Nur Information.\n// ========================================\n\nfor (const tech of requiredTech) {\n\n  const known =\n    profile.skills.some(skill =>\n      matchesTechnology(\n        skill,\n        tech\n      )\n    );\n\n\n  if (!known) {\n\n    missingSkills.push(\n      tech\n    );\n\n  }\n\n}\n\n\n// ========================================\n// 4. DEGREE FIT\n// MAX 10\n// ========================================\n\nconst degreeFields =\n  arrayNorm(job.degree_fields);\n\n\nconst degreeText =\n  degreeFields.join(\" \");\n\n\nconst degreeMatches =\n\n  containsAny(\n    degreeText,\n    [\n      \"computer science\",\n      \"informatik\",\n      \"business informatics\",\n      \"wirtschaftsinformatik\",\n      \"software engineering\",\n      \"information technology\",\n      \"it focus\",\n      \"related field\"\n    ]\n  );\n\n\nif (degreeMatches) {\n\n  score += 10;\n\n  positives.push(\n    \"Degree field matches\"\n  );\n\n}\n\n\n// ========================================\n// 5. LANGUAGES\n// MAX 5\n// ========================================\n\nconst requiredLanguages =\n  arrayNorm(\n    job.required_languages\n  );\n\n\nconst languageMatch =\n  requiredLanguages.filter(language =>\n    profile.languages.some(own =>\n      containsTerm(\n        language,\n        own\n      )\n    )\n  );\n\n\nif (\n  requiredLanguages.length === 0 ||\n  languageMatch.length ===\n    requiredLanguages.length\n) {\n\n  score += 5;\n\n\n  if (\n    requiredLanguages.length > 0\n  ) {\n\n    positives.push(\n      \"Language requirements match\"\n    );\n\n  }\n\n}\n\n\n// ========================================\n// 6. LOCATION\n// MAX 15\n// ========================================\n\nconst location =\n  norm(job.location);\n\nconst remoteOption =\n  norm(job.remote_option);\n\n\nconst isPreferredLocation =\n  profile.preferredLocations.some(place =>\n    containsTerm(\n      location,\n      place\n    )\n  );\n\n\nif (isPreferredLocation) {\n\n  score += 15;\n\n  positives.push(\n    \"Preferred location\"\n  );\n\n}\n\nelse if (\n  remoteOption === \"remote\"\n) {\n\n  // Location filter sollte vorher bereits\n  // sicherstellen, dass dies Deutschland ist.\n\n  score += 15;\n\n  positives.push(\n    \"Remote position\"\n  );\n\n}\n\nelse if (\n  remoteOption === \"hybrid\"\n) {\n\n  score += 7;\n\n  positives.push(\n    \"Hybrid work available\"\n  );\n\n}\n\nelse if (\n  job.home_office_available === true\n) {\n\n  score += 4;\n\n  positives.push(\n    \"Home office available\"\n  );\n\n}\n\n\n// ========================================\n// PENALTIES\n// ========================================\n\n\n// ----------------------------------------\n// Berufserfahrung\n// ----------------------------------------\n\nconst experienceText =\n  norm(job.required_experience);\n\n\nconst clearlyProfessionalExperience =\n\n  /[1-9]\\+?\\s*(year|years|jahr|jahre)/i\n    .test(experienceText)\n\n  ||\n\n  experienceText.includes(\n    \"professional experience\"\n  )\n\n  ||\n\n  experienceText.includes(\n    \"professional work experience\"\n  )\n\n  ||\n\n  experienceText.includes(\n    \"berufserfahrung\"\n  );\n\n\nif (\n  job.previous_work_experience_required === true &&\n  clearlyProfessionalExperience\n) {\n\n  score -= 10;\n\n  warnings.push(\n    \"Professional work experience is required\"\n  );\n\n}\n\n\n// ========================================\n// TECHNOLOGIEN\n// ========================================\n\nif (missingSkills.length > 0) {\n\n  warnings.push(\n    \"Listed required technologies not matched: \" +\n    missingSkills.join(\", \")\n  );\n\n}\n\n\n// ========================================\n// KEINE WERKSTUDENTENSTELLE\n// ========================================\n\nif (\n  profile.wantsWorkingStudent &&\n  !isWorkingStudentRole\n) {\n\n  score -= 20;\n\n  warnings.push(\n    \"Position may not be a working student role\"\n  );\n\n}\n\n\n// ========================================\n// TECHNICAL RELEVANCE GATE\n//\n// Ganz wichtig:\n//\n// Eine Customer-Service-/Marketing-/\n// sonstige nichttechnische Stelle kann\n// dadurch niemals ein guter Match werden.\n// ========================================\n\nconst hasTechnicalRelevance =\n\n  matchedAreas.length > 0 ||\n\n  matchedRequired.length > 0 ||\n\n  matchedPreferred.length > 0;\n\n\nif (!hasTechnicalRelevance) {\n\n  score = Math.min(\n    score,\n    49\n  );\n\n  warnings.push(\n    \"No clear technical relevance detected\"\n  );\n\n}\n\n\n// ========================================\n// WORKING STUDENT GATE\n//\n// Falls es gar keine Studentenstelle ist,\n// darf sie niemals Good/Excellent Match\n// werden.\n// ========================================\n\nif (\n  profile.wantsWorkingStudent &&\n  !isWorkingStudentRole\n) {\n\n  score = Math.min(\n    score,\n    49\n  );\n\n}\n\n\n\nif (job.analysis_status === 'fetch_failed' || job.analysis_status === 'extraction_failed') {\n  score = Math.min(score, 59);\n}\n\n// ========================================\n// SCORE 0 - 100\n// ========================================\n\nscore = Math.round(\n\n  Math.max(\n    0,\n    Math.min(\n      100,\n      score\n    )\n  )\n\n);\n\n\n// ========================================\n// EMPFEHLUNG\n// ========================================\n\nlet recommendation;\n\n\nif (score >= 85) {\n\n  recommendation =\n    \"🔥 Excellent Match - Apply\";\n\n}\n\nelse if (score >= 70) {\n\n  recommendation =\n    \"✅ Good Match - Apply\";\n\n}\n\nelse if (score >= 55) {\n\n  recommendation =\n    \"🟡 Possible Match - Review\";\n\n}\n\nelse {\n\n  recommendation =\n    \"❌ Weak Match\";\n\n}\n\n\n// ========================================\n// OUTPUT\n// ========================================\n\nreturn {\n\n  ...job,\n\n  match: {\n\n    score,\n    recommendation,\n\n    matched_required_technologies:\n      matchedRequired,\n\n    matched_preferred_technologies:\n      matchedPreferred,\n\n    // Feldname bleibt gleich,\n    // damit andere Nodes nicht kaputtgehen.\n    missing_required_technologies:\n      missingSkills,\n\n    matched_technical_areas:\n      matchedAreas,\n\n    positives,\n    warnings\n\n  }\n\n};"
+      },
+      "id": "5956e9e1-dda1-494d-b9d5-dd3c046cc736",
+      "name": "match_score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "content",
+              "cssSelector": "body"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4860cb77-b9b2-49b1-923d-989bddbbe9b5",
+      "name": "HTML Extractor",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        848,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2062a261-3556-4496-8d06-3780fc392311",
+              "name": "url",
+              "type": "string",
+              "value": "={{ $json[\"Job URL\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "79936fd6-7586-4f7b-8bf4-021dc22a9f0f",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -160,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "161a9f85-bb77-4a49-9953-5bcdad0b1115",
+              "leftValue": "={{ $json.url }}",
+              "operator": {
+                "operation": "contains",
+                "type": "string"
+              },
+              "rightValue": "linkedin.com"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {},
+        "parameters": {
+          "conditions": {
+            "conditions": {
+              "0": {
+                "leftValue": "={{ $('Analyzer Input').first().json.url }}"
+              }
+            }
+          }
+        }
+      },
+      "id": "5bebfddc-ac6b-4641-a2cf-f7ff1a85c6ec",
+      "name": "is linkedin?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        16,
+        -384
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "2c5d92ad-1e28-467e-b958-3d64961400f6",
+              "leftValue": "={{ $json.statusCode }}",
+              "operator": {
+                "operation": "equals",
+                "type": "number"
+              },
+              "rightValue": 200
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "7c74f0f5-4c76-4ab3-8428-ff3e30e4ede8",
+      "name": "Request Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fbe90d60-02f2-41c3-8c44-37021dcd8643",
+              "name": "content",
+              "type": "string",
+              "value": "={{ \n[\n  'Job Title: ' + ($json.title ?? $json.job_title ?? 'unknown'),\n  'Company: ' + ($json.company ?? 'unknown'),\n  'Location: ' + ($json.location ?? 'unknown'),\n  'Remote Option: ' + ($json.remote_option ?? $json.work_mode ?? 'unknown'),\n  'Employment Type: ' + ($json.employment_type ?? 'unknown'),\n  '',\n  'Job Description:',\n  ($json.job_description ?? 'No description available from LinkedIn search metadata.'),\n  '',\n  'Source URL:',\n  ($json.source_url ?? $json.url ?? 'unknown'),\n  '',\n  'Note: LinkedIn pages are often blocked for direct fetching. Analyze using the metadata above and treat missing details as unknown rather than inventing them.'\n].join('\\n')\n}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8622c93c-8f9c-44ac-9c2e-208666326381",
+      "name": "LinkedIn Fallback Content",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        240,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "gpt-5.4-nano-2026-03-17",
+          "mode": "list",
+          "value": "gpt-5.4-nano-2026-03-17"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "6cc8fee5-689c-4996-b7f1-dfdb01339bc2",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1152,
+        112
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const analyzed = $input.all();\n\nfunction safeItems(nodeName) {\n  try {\n    return $items(nodeName);\n  } catch (error) {\n    return [];\n  }\n}\n\nconst originals = safeItems('is linkedin?');\n\nconst hasText = value =>\n  typeof value === 'string' && value.trim().length > 0;\n\nconst hasUsefulText = value =>\n  hasText(value) && value.trim().toLowerCase() !== 'unknown';\n\nreturn analyzed.map((item, index) => {\n  const j = item.json;\n  const original = originals[index]?.json ?? originals[0]?.json ?? {};\n\n  return {\n    json: {\n      ...j,\n\n      job_title:\n        hasText(j.job_title)\n          ? j.job_title\n          : (original.job_title ?? original.title ?? ''),\n\n      company:\n        hasText(j.company)\n          ? j.company\n          : (original.company ?? ''),\n\n      location:\n        hasText(j.location)\n          ? j.location\n          : (original.location ?? null),\n\n      url:\n        hasText(j.url)\n          ? j.url\n          : (original.url ?? null),\n\n      source_url:\n        hasText(j.source_url)\n          ? j.source_url\n          : (original.source_url ?? null),\n\n      remote_option:\n        hasUsefulText(j.remote_option)\n          ? j.remote_option\n          : (\n              original.remote_option ??\n              original.work_mode ??\n              'Unknown'\n            ),\n\n      analysis_status: j.analysis_status ?? null,\n      fetch_status_code: j.fetch_status_code ?? null,\n      extraction_error: j.extraction_error ?? null\n    }\n  };\n});"
+      },
+      "id": "3129cfef-676b-4a50-a6c7-87201e0cf379",
+      "name": "Restore Original Job Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function safeAll(nodeName) {\n  try {\n    return $(nodeName).all();\n  } catch (error) {\n    return [];\n  }\n}\n\nconst originalItems = safeAll('is linkedin?');\n\nreturn $input.all().map((item, index) => {\n  const httpItem = item.json;\n  const statusCode = httpItem.statusCode ?? 'unknown';\n\n  const original =\n    originalItems[index]?.json ??\n    originalItems[0]?.json ??\n    {};\n\n  const title = original.title ?? original.job_title ?? '';\n  const company = original.company ?? '';\n  const location = original.location ?? '';\n  const url = original.url ?? '';\n  const remoteOption = original.remote_option ?? original.work_mode ?? 'Unknown';\n  const employmentType = original.employment_type ?? '';\n  const jobDescription = original.job_description ?? '';\n  const sourceUrl = original.source_url ?? url;\n\n  const content =\n    'Job page could not be fetched (HTTP ' + statusCode + ').\\n\\n' +\n    'Job Title: ' + title + '\\n\\n' +\n    'Company: ' + company + '\\n\\n' +\n    'Location: ' + location + '\\n\\n' +\n    'Remote Option: ' + remoteOption + '\\n\\n' +\n    'Employment Type: ' + employmentType + '\\n\\n' +\n    'Job Description:\\n' + jobDescription + '\\n\\n' +\n    'Source URL:\\n' + sourceUrl;\n\n  return {\n    json: {\n      ...original,\n      content,\n      url,\n      source_url: sourceUrl,\n      analysis_status: 'fetch_failed',\n      fetch_status_code: statusCode\n    }\n  };\n});"
+      },
+      "id": "c11655b4-c69a-4728-9c86-74b0603d3f24",
+      "name": "Fetch Failed Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function safeAll(nodeName) {\n  try {\n    return $(nodeName).all();\n  } catch (error) {\n    return [];\n  }\n}\n\nconst originalItems = safeAll('is linkedin?');\n\nreturn $input.all().map((item, index) => {\n  const original =\n    originalItems[index]?.json ??\n    originalItems[0]?.json ??\n    {};\n\n  const errorMessage =\n    item.json.error?.message ??\n    item.json.message ??\n    'Information extraction failed';\n\n  return {\n    json: {\n      job_title: original.title ?? original.job_title ?? null,\n      company: original.company ?? null,\n      location: original.location ?? null,\n      url: original.url ?? null,\n      source_url: original.source_url ?? original.url ?? null,\n      remote_option: original.remote_option ?? original.work_mode ?? 'Unknown',\n      home_office_available: null,\n      employment_type: original.employment_type ?? null,\n      weekly_hours: null,\n      start_date: null,\n      required_technologies: [],\n      preferred_technologies: [],\n      required_requirements: [],\n      preferred_requirements: [],\n      tasks: [],\n      degree_fields: [],\n      minimum_semester: null,\n      previous_work_experience_required: false,\n      required_experience: null,\n      required_languages: [],\n      preferred_languages: [],\n      student_required: null,\n      job_description: original.job_description ?? null,\n      date_posted: original.date_posted ?? null,\n      analysis_status: 'extraction_failed',\n      extraction_error: errorMessage\n    }\n  };\n});"
+      },
+      "id": "d823d295-96f4-47ef-9699-068482df1ca1",
+      "name": "Extraction Failed Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT get_search_config() AS config;",
+        "options": {}
+      },
+      "id": "a3a4657b-55d6-481c-940e-c89e488deffe",
+      "name": "Get Match Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -208,
+        -560
+      ],
+      "executeOnce": true,
+      "disabled": true,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_DOMAIN/api/n8n/user-config?user_id=YOUR_USER_UUID",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Secret",
+              "value": "YOUR_N8N_INTERNAL_SECRET"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cf9c8160-12bb-422a-9ca4-f0d6dde72157",
+      "name": "Fetch User Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        0
+      ]
+    },
+    {
+      "id": "4186f660-cca9-40ac-973f-283736dc6a4e",
+      "name": "Restore Job Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        -128
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map((item, index) => {\n  const jobs = $('Analyzer Input').all();\n  const job = jobs[index]?.json ?? jobs[0]?.json ?? {};\n  const fetched = item.json ?? {};\n  return {\n    json: {\n      ...job,\n      ...fetched,\n      url: job.url ?? fetched.url,\n      title: job.title ?? fetched.title,\n      company: job.company ?? fetched.company,\n      location: job.location ?? fetched.location,\n      remote_option: job.remote_option ?? job.work_mode ?? fetched.remote_option,\n      source_url: job.source_url ?? job.url ?? fetched.source_url,\n      config: fetched.config ?? fetched,\n    },\n  };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "match_score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Extraction Failed Fallback",
+            "type": "error",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "manual_job_url_Input": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pulls_the_url": {
+      "main": [
+        [
+          {
+            "node": "Request Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Fetch Failed Fallback",
+            "type": "error",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Extractor": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Fetch Failed Fallback",
+            "type": "error",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "is linkedin?": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Fallback Content",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "pulls_the_url",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Successful?": {
+      "main": [
+        [
+          {
+            "node": "HTML Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Failed Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Fallback Content": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "match_score": {
+      "main": [
+        [
+          {
+            "node": "Restore Original Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Failed Fallback": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraction Failed Fallback": {
+      "main": [
+        [
+          {
+            "node": "match_score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "is linkedin?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyzer Input": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Config": {
+      "main": [
+        [
+          {
+            "node": "Restore Job Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Job Fields": {
+      "main": [
+        [
+          {
+            "node": "is linkedin?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "sourceId": "inw6qMHWkng6OdKs",
+    "role": "Per-user job analyzer template (Web Config)",
+    "exportedAt": "2026-08-30T02:47:59.310Z",
+    "importNote": "After import: re-map Postgres/OpenAI/DeepSeek credentials, set Fetch User Config URL + user_id, publish workflow."
+  }
+}

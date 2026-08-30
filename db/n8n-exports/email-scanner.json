@@ -1,0 +1,402 @@
+{
+  "name": "Email Scanner",
+  "nodes": [
+    {
+      "id": "a48e24e2-4f63-4d63-8a70-aec8679f4e80",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        288
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bfe44238-e60d-4636-8436-15bfc6cc93de",
+      "name": "Get email settings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        288
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, imap_host, imap_port, imap_user, imap_password, imap_secure, scan_enabled\nFROM email_settings\nWHERE scan_enabled = true\nORDER BY created_at\nLIMIT 1;"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "b5269939-e43e-4b6f-9c93-dc7a4834549e",
+      "name": "Has IMAP config?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        288
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.imap_host }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "leftValue": "={{ $json.imap_user }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "leftValue": "={{ $json.imap_password }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bed03a22-4dda-4cb7-8794-7586ae5cef6b",
+      "name": "IMAP sync via web app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        176
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DOMAIN/api/email/sync",
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "3468e1ff-1f4a-4efc-926c-fe94e8dde3ca",
+      "name": "Expand emails for classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        176
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const settings = $('Get email settings').first().json;\nconst sync = $input.first().json || {};\nconst emails = Array.isArray(sync.emails) ? sync.emails : [];\nreturn emails.map((e) => ({\n  json: {\n    settings_id: settings.id,\n    imap_user: settings.imap_user,\n    message_id: e.messageId || e.message_id || null,\n    from: e.from || '',\n    subject: e.subject || '',\n    body: e.body || '',\n    received_at: e.receivedAt || e.received_at || null\n  }\n}));"
+      }
+    },
+    {
+      "id": "b1b4ca7a-2d6d-461e-a6b1-93cd06f0edb9",
+      "name": "Update last scan success",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE email_settings\nSET last_scan_at = timezone('utc', now()),\n    last_scan_status = 'success',\n    last_scan_error = NULL,\n    updated_at = timezone('utc', now())\nWHERE id = $1\nRETURNING id, last_scan_at, last_scan_status;",
+        "options": {
+          "queryReplacement": "={{ [$(' + \"'Get email settings'\" + ').first().json.id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "1e7c7612-4d36-4209-865d-cc18039b9d07",
+      "name": "Classify email",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        192
+      ],
+      "parameters": {
+        "resource": "chat",
+        "operation": "complete",
+        "model": "gpt-4o-mini",
+        "prompt": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "Classify recruiting/application emails. Respond with JSON only: {\"category\":\"...\",\"confidence\":0.0,\"summary\":\"...\",\"suggested_action\":\"...\"}. Categories: application_received, rejection, interview_invitation, request_for_information, assessment_invitation, technical_test, follow_up, offer, generic_recruiting_email, unknown."
+            },
+            {
+              "role": "user",
+              "content": "={{ \"From: \" + $json.from + \"\\nSubject: \" + $json.subject + \"\\n\\n\" + String($json.body || \"\").slice(0, 4000) }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 300
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "id": "63603896-d73e-4910-9ea3-c7df834dbb8b",
+      "name": "Parse classification JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "const email = $('Each email').item.json;\nconst raw = $json.message?.content || $json.text || $json.content || '';\nlet parsed = { category: 'unknown', confidence: 0.5 };\ntry {\n  const text = String(raw).trim().replace(/^```(?:json)?s*/i, '').replace(/s*```$/i, '').trim();\n  const start = text.indexOf('{');\n  const end = text.lastIndexOf('}');\n  if (start !== -1 && end !== -1) parsed = JSON.parse(text.slice(start, end + 1));\n} catch (e) {}\nreturn {\n  json: {\n    settings_id: email.settings_id,\n    message_id: email.message_id,\n    from: email.from,\n    imap_user: email.imap_user,\n    subject: email.subject,\n    body: email.body,\n    received_at: email.received_at,\n    category: parsed.category || 'unknown',\n    confidence: Number(parsed.confidence ?? 0.5)\n  }\n};"
+      }
+    },
+    {
+      "id": "f0155618-ab2d-42be-9b31-638ad62d3b08",
+      "name": "Store classified email",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1792,
+        224
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id FROM store_classified_email($1, $2, $3, $4, $5, $6, $7, $8, NULL);",
+        "options": {
+          "queryReplacement": "={{ [$json.message_id, $json.from, $json.imap_user, $json.subject, String($json.body || \"\").slice(0, 50000), $json.received_at, $json.category, $json.confidence] }}"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "0534e3d1-5306-4dfb-97a9-1e0301bad8a4",
+      "name": "Each email",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        176
+      ],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "219f58f5-acdd-4f00-9c5c-850b9b3df0d3",
+      "name": "IMAP not configured",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        368
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{\n  json: {\n    message: 'Configure IMAP in web settings, then use /api/email/sync',\n    settings_id: $input.first().json.id\n  }\n}];"
+      }
+    },
+    {
+      "id": "e13c26e1-18ab-45b9-b3c5-29f4d3691af4",
+      "name": "Update last scan skipped",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        896,
+        368
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE email_settings\nSET last_scan_at = timezone('utc', now()),\n    last_scan_status = 'skipped',\n    last_scan_error = 'IMAP not configured',\n    updated_at = timezone('utc', now())\nWHERE id = $1\nRETURNING id, last_scan_status;",
+        "options": {
+          "queryReplacement": "={{ [$json.settings_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Get email settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get email settings": {
+      "main": [
+        [
+          {
+            "node": "Has IMAP config?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has IMAP config?": {
+      "main": [
+        [
+          {
+            "node": "IMAP sync via web app",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IMAP not configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IMAP sync via web app": {
+      "main": [
+        [
+          {
+            "node": "Expand emails for classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand emails for classify": {
+      "main": [
+        [
+          {
+            "node": "Each email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify email": {
+      "main": [
+        [
+          {
+            "node": "Parse classification JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse classification JSON": {
+      "main": [
+        [
+          {
+            "node": "Store classified email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store classified email": {
+      "main": [
+        [
+          {
+            "node": "Each email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Each email": {
+      "main": [
+        [
+          {
+            "node": "Update last scan success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IMAP not configured": {
+      "main": [
+        [
+          {
+            "node": "Update last scan skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "meta": {
+    "sourceId": "eHyNMKAQcHbGKpM5",
+    "role": "Global IMAP email scanner (every 15 min)",
+    "exportedAt": "2026-08-30T02:57:33.426Z",
+    "importNote": "After import: re-map Postgres/OpenAI/DeepSeek credentials, set Fetch User Config URL + user_id, publish workflow."
+  }
+}
