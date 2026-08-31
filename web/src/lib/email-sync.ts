@@ -4,6 +4,59 @@ import { requireUserId } from "./auth";
 import { queryOne } from "./db";
 import { classifyEmail } from "./assistant";
 
+const RECRUITING_KEYWORDS =
+  /bewerbung|application|interview|stelle|position|recruiting|karriere|vielen dank|einladung|angebot|absage|reject|eingangsbestätigung|eingangsbestaetigung|empfangsbestätigung|empfangsbestaetigung|zustellbestätigung|lesebestätigung|eingegangen|we have received|confirmation of receipt|acknowledg(e|ement)|auto[- ]?reply|automatische (antwort|bestätigung)/i;
+
+const RECEIPT_CONFIRMATION =
+  /eingangsbestätigung|eingangsbestaetigung|empfangsbestätigung|empfangsbestaetigung|zustellbestätigung|lesebestätigung|application received|confirmation of (receipt|your application)|receipt of your application|confirm(ing|s)? (the )?receipt|we (have )?received your (application|cv|resume|documents|email|message)|wir haben ihre (bewerbung|unterlagen|e-?mail|nachricht) erhalten|wir bestätigen den eingang|ihre (bewerbung|unterlagen|e-?mail|nachricht) (ist|sind) (erfolgreich )?bei uns eingegangen|dies ist eine automatische (bestätigung|antwort|eingangsbestätigung)|automatische eingangsbestätigung/i;
+
+const HIRING_DECISION =
+  /\b(absage|leider|abgelehnt|reject(?:ed|ion)?|unsuccessful|we will not (be )?(proceed|move forward)|not (be )?successful|einladung zum (gespräch|interview|vorstellungsgespräch)|interview invitation|jobangebot|offer of employment|assessment|einstellungstest)\b/i;
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  eingangsbestaetigung: "application_received",
+  empfangsbestaetigung: "application_received",
+  zustellbestaetigung: "application_received",
+  lesebestaetigung: "application_received",
+  receipt_confirmation: "application_received",
+  receipt: "application_received",
+  acknowledgement: "application_received",
+  acknowledgment: "application_received",
+  auto_reply: "application_received",
+};
+
+export function normalizeEmailCategory(category: string): string {
+  const key = category
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[\s-]+/g, "_");
+  return CATEGORY_ALIASES[key] ?? category;
+}
+
+export function detectApplicationReceipt(
+  from: string,
+  subject: string,
+  body: string,
+): {
+  category: "application_received";
+  confidence: number;
+  summary: string;
+  suggested_action: string;
+} | null {
+  const text = `${from}\n${subject}\n${body}`;
+  if (!RECEIPT_CONFIRMATION.test(text) || HIRING_DECISION.test(text)) return null;
+  return {
+    category: "application_received",
+    confidence: 0.92,
+    summary: "Eingangsbestätigung — Bewerbung oder Nachricht wurde bestätigt, ohne Entscheidung.",
+    suggested_action: "Status auf waiting setzen und auf weitere Rückmeldung warten.",
+  };
+}
+
 export interface EmailSettings {
   id: string;
   imap_host: string | null;
@@ -124,14 +177,18 @@ export async function syncEmails(maxMessages = 30) {
           const messageId = parsed.messageId ?? `uid-${uid}`;
           const receivedAt = parsed.date ?? new Date();
 
-          const recruitingKeywords =
-            /bewerbung|application|interview|stelle|position|recruiting|karriere|vielen dank|einladung|angebot|absage|reject/i;
-          if (!recruitingKeywords.test(`${subject} ${body}`)) {
+          if (!RECRUITING_KEYWORDS.test(`${subject} ${body}`)) {
             results.skipped++;
             continue;
           }
 
-          const classification = await classifyEmail(from, subject, body);
+          const classified =
+            detectApplicationReceipt(from, subject, body) ??
+            (await classifyEmail(from, subject, body));
+          const classification = {
+            ...classified,
+            category: normalizeEmailCategory(classified.category),
+          };
 
           await queryOne(
             `SELECT id FROM store_classified_email(

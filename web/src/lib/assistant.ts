@@ -65,7 +65,13 @@ export async function classifyEmail(
     summary: string;
     suggested_action: string;
   }>(
-    `Classify recruiting/application emails. Categories: application_received, rejection, interview_invitation, request_for_information, assessment_invitation, technical_test, follow_up, offer, generic_recruiting_email, unknown.`,
+    `Classify recruiting/application emails. Respond with JSON only: {"category":"...","confidence":0.0,"summary":"...","suggested_action":"..."}.
+Categories: application_received, rejection, interview_invitation, request_for_information, assessment_invitation, technical_test, follow_up, offer, generic_recruiting_email, unknown.
+
+Use application_received for receipt confirmations (Eingangsbestätigung / Empfangsbestätigung / auto-replies) that only confirm the application or email arrived, with no hiring decision. Typical signals: "Eingangsbestätigung", "Empfangsbestätigung", "Wir haben Ihre Bewerbung erhalten", "Ihre Bewerbung ist bei uns eingegangen", "Vielen Dank für Ihre Bewerbung" without absage/interview/offer, "we have received your application", "application received", "thank you for applying" as an automated receipt.
+
+If the same email confirms receipt AND rejects, invites, or offers, use rejection / interview_invitation / offer — not application_received.
+Never classify a pure Eingangsbestätigung as generic_recruiting_email, follow_up, or unknown.`,
     `From: ${from}\nSubject: ${subject}\n\n${body.slice(0, 4000)}`,
   );
 }
