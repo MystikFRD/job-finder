@@ -57,7 +57,9 @@ export function EmailSettingsForm({
       const res = await fetch("/api/email/sync", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMessage(`Scan complete: ${data.stored} new email(s), ${data.skipped} already known.`);
+      setMessage(
+        `Scan complete: ${data.stored} recruiting email(s) stored, ${data.skipped} skipped.`,
+      );
       router.refresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Scan failed");

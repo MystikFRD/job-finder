@@ -1,7 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { requireUserId } from "./auth";
-import { queryOne } from "./db";
+import { query, queryOne } from "./db";
 import { classifyEmail } from "./assistant";
 
 const RECRUITING_KEYWORDS =
@@ -9,6 +9,9 @@ const RECRUITING_KEYWORDS =
 
 const RECEIPT_CONFIRMATION =
   /eingangsbestätigung|eingangsbestaetigung|empfangsbestätigung|empfangsbestaetigung|zustellbestätigung|lesebestätigung|application received|confirmation of (receipt|your application)|receipt of your application|confirm(ing|s)? (the )?receipt|we (have )?received your (application|cv|resume|documents|email|message)|wir haben ihre (bewerbung|unterlagen|e-?mail|nachricht) erhalten|wir bestätigen den eingang|ihre (bewerbung|unterlagen|e-?mail|nachricht) (ist|sind) (erfolgreich )?bei uns eingegangen|dies ist eine automatische (bestätigung|antwort|eingangsbestätigung)|automatische eingangsbestätigung/i;
+
+const NON_RECRUITING =
+  /2-faktor-authentifizierung|google-konto|noreply@accounts\.google|security[- ]alert|verify your (email|account)/i;
 
 const HIRING_DECISION =
   /\b(absage|leider|abgelehnt|reject(?:ed|ion)?|unsuccessful|we will not (be )?(proceed|move forward)|not (be )?successful|einladung zum (gespräch|interview|vorstellungsgespräch)|interview invitation|jobangebot|offer of employment|assessment|einstellungstest)\b/i;
@@ -59,6 +62,7 @@ export function detectApplicationReceipt(
 
 export interface EmailSettings {
   id: string;
+  user_id: string;
   imap_host: string | null;
   imap_port: number;
   imap_user: string | null;
@@ -68,14 +72,26 @@ export interface EmailSettings {
   auto_update_min_confidence: number;
 }
 
-export async function getEmailSettings(): Promise<EmailSettings | null> {
-  const userId = await requireUserId();
+export async function getEmailSettings(userId?: string): Promise<EmailSettings | null> {
+  const resolvedUserId = userId ?? (await requireUserId());
   return queryOne<EmailSettings>(
-    `SELECT id, imap_host, imap_port, imap_user, imap_password, imap_secure,
+    `SELECT id, user_id, imap_host, imap_port, imap_user, imap_password, imap_secure,
             scan_enabled, auto_update_min_confidence
      FROM email_settings WHERE user_id = $1`,
-    [userId],
+    [resolvedUserId],
   );
+}
+
+export async function listScanEnabledUserIds(): Promise<string[]> {
+  const rows = await query<{ user_id: string }>(
+    `SELECT user_id FROM email_settings
+     WHERE scan_enabled = true
+       AND user_id IS NOT NULL
+       AND imap_host IS NOT NULL AND imap_host <> ''
+       AND imap_user IS NOT NULL AND imap_user <> ''
+       AND imap_password IS NOT NULL AND imap_password <> ''`,
+  );
+  return rows.map((row) => row.user_id);
 }
 
 export async function updateEmailSettings(data: Partial<EmailSettings>) {
@@ -132,8 +148,8 @@ export async function updateEmailSettings(data: Partial<EmailSettings>) {
   );
 }
 
-export async function syncEmails(maxMessages = 30) {
-  const settings = await getEmailSettings();
+export async function syncEmails(maxMessages = 30, userId?: string) {
+  const settings = await getEmailSettings(userId);
   if (!settings?.imap_host || !settings.imap_user || !settings.imap_password) {
     throw new Error("IMAP not configured. Set email settings in Settings.");
   }
@@ -177,7 +193,8 @@ export async function syncEmails(maxMessages = 30) {
           const messageId = parsed.messageId ?? `uid-${uid}`;
           const receivedAt = parsed.date ?? new Date();
 
-          if (!RECRUITING_KEYWORDS.test(`${subject} ${body}`)) {
+          const haystack = `${subject} ${body}`;
+          if (NON_RECRUITING.test(haystack) || !RECRUITING_KEYWORDS.test(haystack)) {
             results.skipped++;
             continue;
           }
@@ -192,7 +209,7 @@ export async function syncEmails(maxMessages = 30) {
 
           await queryOne(
             `SELECT id FROM store_classified_email(
-              $1, $2, $3, $4, $5, $6, $7, $8, NULL
+              $1, $2, $3, $4, $5, $6, $7, $8, NULL, $9
             )`,
             [
               messageId,
@@ -203,6 +220,7 @@ export async function syncEmails(maxMessages = 30) {
               receivedAt.toISOString(),
               classification.category,
               classification.confidence,
+              settings.user_id,
             ],
           );
           results.stored++;
