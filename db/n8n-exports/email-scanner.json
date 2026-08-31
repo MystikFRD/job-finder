@@ -95,7 +95,16 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR_DOMAIN/api/email/sync",
+        "url": "https://YOUR_DOMAIN/api/n8n/email-sync",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-Secret",
+              "value": "YOUR_N8N_INTERNAL_SECRET"
+            }
+          ]
+        },
         "options": {}
       },
       "alwaysOutputData": true,
